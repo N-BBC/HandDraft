@@ -1,0 +1,20 @@
+HandDraft visual asset notices
+
+papers/reference-*.jpg
+Source: https://gitee.com/huadeng863/handwriting-font-conversion/tree/master/background
+Permission: included with rights-holder authorization confirmed by the project user.
+Attribution details: papers/SOURCE.md
+
+desk-reference-local.jpg
+Source: user-provided local reference image.
+Distribution: local preview only; excluded from Git until redistribution rights are confirmed.
+
+desk-photo-v2.jpg
+Source: https://images.unsplash.com/photo-1499750310107-5fef28a66643
+License: Unsplash License (https://unsplash.com/license)
+Used as the built-in desk preview and default desk-photo environment.
+
+lucide.min.js
+Project: Lucide Icons (https://lucide.dev/)
+License: ISC
+Full license text: LUCIDE-LICENSE.txt

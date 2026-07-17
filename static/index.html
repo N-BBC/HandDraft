@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>HandDraft - 手写文稿工作台</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260717-2" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <div><strong>HandDraft</strong><span>手写文稿工作台</span></div>
+      </div>
+      <div class="project-state">
+        <strong id="project-name">未命名文稿</strong>
+        <span id="save-state">本地处理 · 未上传服务器</span>
+      </div>
+      <div class="header-actions">
+        <div class="service-state" id="health" data-state="loading">
+          <span class="state-dot"></span><span id="health-text">连接中</span>
+        </div>
+        <button class="icon-button" id="reset-workspace" type="button" title="重置工作台" aria-label="重置工作台"><i data-lucide="rotate-ccw"></i></button>
+        <button class="header-export" id="header-export" type="button" disabled><i data-lucide="download"></i><span>导出 PDF</span></button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <nav class="tool-rail" aria-label="工具导航">
+        <button class="rail-tool active" type="button" data-target="source-section" title="文档"><i data-lucide="file-up"></i><small>文档</small></button>
+        <button class="rail-tool" type="button" data-target="type-section" title="字迹"><i data-lucide="type"></i><small>字迹</small></button>
+        <button class="rail-tool" type="button" data-target="layout-section" title="排版"><i data-lucide="layout-template"></i><small>排版</small></button>
+        <button class="rail-tool" type="button" data-target="natural-section" title="自然度"><i data-lucide="sliders-horizontal"></i><small>自然</small></button>
+        <span class="rail-spacer"></span>
+        <button class="rail-tool" id="open-ai" type="button" title="AI 字迹"><i data-lucide="sparkles"></i><small>AI</small></button>
+      </nav>
+
+      <aside class="settings-panel" id="settings-panel">
+        <form id="render-form">
+          <div class="settings-heading">
+            <div><span>制作面板</span><strong>创建手写文稿</strong></div>
+            <span class="version-tag">LOCAL</span>
+          </div>
+
+          <section class="settings-section" id="source-section">
+            <div class="section-heading"><strong>文档内容</strong><span>01</span></div>
+            <div class="segmented input-mode" role="radiogroup">
+              <label><input type="radio" name="input-mode" value="file" checked /><span>上传文档</span></label>
+              <label><input type="radio" name="input-mode" value="text" /><span>直接输入</span></label>
+            </div>
+
+            <label class="document-drop" id="document-drop" for="document">
+              <span class="drop-symbol"><i data-lucide="upload-cloud"></i></span>
+              <strong id="document-name">选择 Markdown 或 Word</strong>
+              <span>MD · TXT · DOCX · DOC</span>
+              <input id="document" type="file" accept=".md,.markdown,.txt,.doc,.docx" />
+            </label>
+            <textarea id="direct-text" class="direct-text" rows="7" placeholder="在这里输入需要转换的文字…" hidden></textarea>
+
+            <div class="asset-row single">
+              <label class="asset-upload" for="background"><span>自定义实拍模板</span><small id="background-name">上传一张带纸张与环境的图片</small><input id="background" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+            </div>
+          </section>
+
+          <section class="settings-section" id="type-section">
+            <div class="section-heading"><strong>字迹设置</strong><span>02</span></div>
+            <label class="field-label" for="font-id">字体库</label>
+            <select id="font-id"><option>读取字体中</option></select>
+            <div class="selected-font-sample" id="selected-font-sample">今天也要认真写字</div>
+            <div class="ink-options" aria-label="墨色">
+              <span>墨色</span>
+              <label title="中性黑"><input type="radio" name="ink-color" value="#202324" checked /><i style="--ink-swatch:#202324"></i></label>
+              <label title="钢笔蓝"><input type="radio" name="ink-color" value="#243f5c" /><i style="--ink-swatch:#243f5c"></i></label>
+              <label title="墨水棕"><input type="radio" name="ink-color" value="#4b342d" /><i style="--ink-swatch:#4b342d"></i></label>
+            </div>
+            <div class="inline-actions">
+              <label class="upload-font" for="font-upload">上传字体<input id="font-upload" type="file" accept=".ttf,.otf,.ttc" /></label>
+              <button class="quiet-button" id="refresh-fonts" type="button">刷新字体</button>
+            </div>
+            <p class="status-line" id="font-install-status">检查字体状态</p>
+          </section>
+
+          <section class="settings-section" id="layout-section">
+            <div class="section-heading"><strong>排版参数</strong><span>03</span></div>
+            <div class="number-grid">
+              <label>字号<div class="stepper"><input id="font-size" type="number" min="10" max="160" value="42" /><span>px</span></div></label>
+              <label>行距<div class="stepper"><input id="line-height" type="number" min="16" max="240" value="68" /><span>px</span></div></label>
+              <label>字距<div class="stepper"><input id="char-spacing" type="number" min="-12" max="40" step="0.5" value="0.5" /><span>px</span></div></label>
+              <label>段距<div class="stepper"><input id="paragraph-spacing" type="number" min="0" max="160" value="12" /><span>px</span></div></label>
+            </div>
+            <div class="number-grid margin-grid">
+              <label>左边距<div class="stepper"><input id="margin-left" type="number" min="0" max="1600" value="149" /><span>px</span></div></label>
+              <label>右边距<div class="stepper"><input id="margin-right" type="number" min="0" max="1600" value="124" /><span>px</span></div></label>
+            </div>
+            <details class="inline-details">
+              <summary>页面尺寸与上下边距</summary>
+              <div class="number-grid detail-grid">
+                <label>宽<input id="page-width" type="number" min="640" max="3200" value="1240" /></label>
+                <label>高<input id="page-height" type="number" min="900" max="4200" value="1654" /></label>
+                <label>上<input id="margin-top" type="number" min="0" max="3000" value="165" /></label>
+                <label>下<input id="margin-bottom" type="number" min="0" max="3000" value="132" /></label>
+              </div>
+              <label class="check-row"><input id="use-background-size" type="checkbox" checked /><span>使用上传纸张原始尺寸</span></label>
+            </details>
+          </section>
+
+          <section class="settings-section" id="natural-section">
+            <div class="section-heading"><strong>自然度</strong><span>04</span></div>
+            <div class="range-control"><div><label for="position-jitter">位置起伏</label><output id="position-jitter-value">0.7</output></div><input id="position-jitter" type="range" min="0" max="8" step="0.1" value="0.7" /></div>
+            <div class="range-control"><div><label for="rotation-jitter">旋转幅度</label><output id="rotation-jitter-value">0.7°</output></div><input id="rotation-jitter" type="range" min="0" max="8" step="0.1" value="0.7" /></div>
+            <div class="range-control"><div><label for="size-jitter">字号变化</label><output id="size-jitter-value">0.5</output></div><input id="size-jitter" type="range" min="0" max="8" step="0.1" value="0.5" /></div>
+            <div class="range-control"><div><label for="baseline-jitter">基线起伏</label><output id="baseline-jitter-value">0.9</output></div><input id="baseline-jitter" type="range" min="0" max="12" step="0.1" value="0.9" /></div>
+            <div class="range-control"><div><label for="ink-density">墨迹浓度</label><output id="ink-density-value">92%</output></div><input id="ink-density" type="range" min="0.35" max="1" step="0.01" value="0.92" /></div>
+            <div class="advanced-row">
+              <label>行倾斜<input id="line-slope-jitter" type="number" min="0" max="0.12" step="0.001" value="0.003" /></label>
+              <label>订正率<input id="correction-rate" type="number" min="0" max="0.18" step="0.005" value="0" /></label>
+              <label>种子<input id="seed" type="number" min="0" max="999999" value="17" /></label>
+            </div>
+          </section>
+
+          <div class="settings-actions">
+            <button class="generate-button" id="render-button" type="submit"><span>生成预览</span><small>PNG · PDF · ZIP</small></button>
+          </div>
+        </form>
+      </aside>
+
+      <main class="canvas-area">
+        <div class="canvas-toolbar">
+          <div class="canvas-title"><strong>页面预览</strong><span id="result-meta">实时样式</span></div>
+          <div class="zoom-control">
+            <button type="button" id="zoom-out" title="缩小" aria-label="缩小"><i data-lucide="minus"></i></button><output id="zoom-value">72%</output><button type="button" id="zoom-in" title="放大" aria-label="放大"><i data-lucide="plus"></i></button>
+          </div>
+          <div class="canvas-actions">
+            <button class="quiet-button" id="clear-result" type="button">清除结果</button>
+            <a class="primary-download disabled" id="download-pdf" href="#" download><i data-lucide="file-down"></i><span>下载 PDF</span></a>
+          </div>
+        </div>
+
+        <div class="studio" id="studio" data-output="desk_photo">
+          <div class="live-paper reference_blank_desk" id="live-paper">
+            <div class="paper-content" id="paper-content">
+              <p class="paper-date">2026 / HANDDRAFT</p>
+              <p>把想法落到纸上，字迹不必完全相同。</p>
+              <p>轻微的起伏、间距和墨色变化，会让每一页更自然。</p>
+              <p>今天也要认真写字。</p>
+            </div>
+          </div>
+          <img class="result-image" id="result-image" alt="生成的手写页面" hidden />
+          <div class="canvas-loading" id="loading-overlay" hidden><span class="spinner"></span><strong>正在排版与渲染</strong><small>本地处理，不上传文档</small></div>
+        </div>
+
+        <div class="page-strip" id="page-strip">
+          <div class="page-thumb live active"><span>实时</span></div>
+        </div>
+        <div class="toast" id="message" hidden></div>
+      </main>
+
+      <aside class="inspector-panel">
+        <section class="inspector-section">
+          <div class="inspector-heading"><strong>字体风格</strong><button id="download-open-fonts" type="button">字体已安装</button></div>
+          <div class="font-presets" id="font-presets"></div>
+        </section>
+
+        <section class="inspector-section">
+          <div class="inspector-heading"><strong>纸张</strong><span>内置纹理</span></div>
+          <div class="paper-presets">
+            <button class="paper-preset active" type="button" data-paper="reference_blank_desk"><span class="paper-swatch reference-blank-desk"></span><small>自然桌面</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_blank_warm"><span class="paper-swatch reference-blank-warm"></span><small>暖光桌面</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_blank_cool"><span class="paper-swatch reference-blank-cool"></span><small>冷光桌面</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_blank_mono"><span class="paper-swatch reference-blank-mono"></span><small>黑白桌面</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_lined_photo"><span class="paper-swatch reference-lined-photo"></span><small>实拍横线</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_lined_clean"><span class="paper-swatch reference-lined-clean"></span><small>标准横线</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_notebook"><span class="paper-swatch reference-notebook"></span><small>笔记纸</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_report_body"><span class="paper-swatch reference-report-body"></span><small>报告正文</small></button>
+            <button class="paper-preset" type="button" data-paper="reference_report_cover"><span class="paper-swatch reference-report-cover"></span><small>报告首页</small></button>
+            <button class="paper-preset" type="button" data-paper="grid"><span class="paper-swatch grid"></span><small>方格纸</small></button>
+            <button class="paper-preset" type="button" data-paper="blank"><span class="paper-swatch blank"></span><small>纯白纸</small></button>
+          </div>
+        </section>
+
+        <section class="inspector-section">
+          <div class="inspector-heading"><strong>呈现方式</strong><span>输出画面</span></div>
+          <div class="mode-cards">
+            <label class="mode-card active"><input type="radio" name="scene-mode" value="desk_photo" checked /><span class="mode-visual desk"></span><span><strong>桌面拍照</strong><small>纸张、阴影与环境</small></span></label>
+            <label class="mode-card"><input type="radio" name="scene-mode" value="scan" /><span class="mode-visual clean"></span><span><strong>净纸页面</strong><small>适合打印与归档</small></span></label>
+          </div>
+        </section>
+
+        <section class="inspector-section export-section">
+          <div class="inspector-heading"><strong>导出</strong><span id="export-status">等待生成</span></div>
+          <div class="export-grid">
+            <a id="download-png" class="export-tile disabled" href="#" download><strong>PNG</strong><small>当前页面</small></a>
+            <a id="download-zip" class="export-tile disabled" href="#" download><strong>ZIP</strong><small>全部页面</small></a>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <dialog id="ai-dialog">
+      <form method="dialog" class="dialog-card">
+        <div class="dialog-heading"><div><span>实验功能</span><strong>AI 自定义字迹库</strong></div><button value="cancel" type="submit" aria-label="关闭"><i data-lucide="x"></i></button></div>
+        <label>Provider<input id="ai-provider" type="text" value="custom" autocomplete="off" /></label>
+        <label>Model<input id="ai-model" type="text" placeholder="model name" autocomplete="off" /></label>
+        <label>API Key<input id="ai-key" type="password" placeholder="仅用于当前请求" autocomplete="off" /></label>
+        <p id="ai-status">密钥不写盘、不进入浏览器存储，请求后自动清空。</p>
+        <div class="dialog-actions"><button class="quiet-button" id="clear-key" type="button">清空</button><button class="generate-button compact" id="ai-check" type="button">检查接口</button></div>
+      </form>
+    </dialog>
+
+    <script src="/static/assets/lucide.min.js"></script>
+    <script src="/static/app.js?v=20260717-2"></script>
+  </body>
+</html>
