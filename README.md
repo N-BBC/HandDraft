@@ -55,8 +55,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Port 8017
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -HostAddress 0.0.0.0 -Port 8017
 ```
 
-用 `ipconfig` 查看本机 IPv4 地址，例如 `192.168.1.23`。朋友连接同一
-Wi-Fi 后访问 `http://192.168.1.23:8017`。Windows 首次询问防火墙权限时，
+用 `ipconfig` 查看本机 IPv4 地址，例如 `xxx.xxx.x.xx`。朋友连接同一
+Wi-Fi 后访问 `xx.xxx.x.xx:8017`。Windows 首次询问防火墙权限时，
 只允许“专用网络”即可。
 
 ### Docker 或云服务器
