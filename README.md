@@ -27,11 +27,6 @@ HandDraft 是一个本地优先的开源文档转手写工具。它可以读取 
 
 界面只提供日常手写字体与用户上传字体，草书、标题字体和系统楷书不会进入可选列表。应用会优先使用本机导入的参考项目字库；没有本地参考字库时，默认回退到 OFL 授权的 `Xiaolai` 和 `LXGW WenKai`。
 
-HandDraft 从 [`huadeng863/handwriting-font-conversion`](https://gitee.com/huadeng863/handwriting-font-conversion) 接入李国夫、青叶、国祥、戴锦好、义启和立夏六款字体，其中李国夫手写体是原项目默认字体。项目使用者已确认权利人授权这些字体随本开源包收录并注明来源。完整记录见 `data/fonts/REFERENCE-FONTS-SOURCE.md`。
-
-原项目 `background` 目录的六张实拍纸张模板也已接入，来源与授权说明见 `static/assets/papers/SOURCE.md`。渲染时文字会直接写入实拍模板，不再覆盖一层数字白纸，因此会保留原照片的纸纹、阴影、折痕和周边环境。
-
-字体文件位于 `data/fonts`，OFL 许可证保存在 `data/fonts/licenses`。参考项目字体保留原文件名以便追溯。
 
 ## 安装与运行
 
