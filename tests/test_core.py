@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import os
+import time
 import unittest
 from pathlib import Path
 
@@ -11,10 +13,35 @@ from handdraft.document import docx_to_text, markdown_to_text
 from handdraft.fonts import find_default_font
 from handdraft.open_fonts import OPEN_FONTS
 from handdraft.renderer import RenderSettings, render_pages, save_outputs
+from handdraft.main import SlidingWindowLimiter, cleanup_expired_jobs
 from handdraft.security import redact_secret
 
 
 class HandDraftCoreTests(unittest.TestCase):
+    def test_sliding_window_rate_limiter(self) -> None:
+        limiter = SlidingWindowLimiter(limit=2, window_seconds=10)
+        self.assertEqual(limiter.allow("client", now=0), (True, 0))
+        self.assertEqual(limiter.allow("client", now=1), (True, 0))
+        self.assertEqual(limiter.allow("client", now=2), (False, 8))
+        self.assertEqual(limiter.allow("client", now=11), (True, 0))
+
+    def test_expired_job_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            jobs_dir = Path(temp_dir)
+            old_job = jobs_dir / "old"
+            fresh_job = jobs_dir / "fresh"
+            old_job.mkdir()
+            fresh_job.mkdir()
+            now = time.time()
+            os.utime(old_job, (now - 120, now - 120))
+            os.utime(fresh_job, (now, now))
+
+            removed = cleanup_expired_jobs(jobs_dir, max_age_seconds=60, now=now)
+
+            self.assertEqual(removed, 1)
+            self.assertFalse(old_job.exists())
+            self.assertTrue(fresh_job.exists())
+
     def test_markdown_conversion(self) -> None:
         result = markdown_to_text("# Title\n\n- first\n- [second](https://example.com)")
         self.assertIn("Title", result)

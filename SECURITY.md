@@ -9,11 +9,12 @@ place them in frontend source files.
 
 ## Public deployment
 
-The current version has no user accounts, access control, rate limiting, or
-automatic job cleanup. Uploaded documents and generated files are temporarily
-stored under `data/jobs` on the machine running the service. Use a trusted
-network or add authentication and cleanup before operating a permanent public
-instance.
+Set `HANDDRAFT_DEMO_MODE=1` for a public demonstration. Demo mode applies a
+per-IP render rate limit, caps page and upload sizes, disables API-key input,
+and deletes expired jobs. Uploaded documents and generated files are stored
+under `data/jobs` until the configured retention window expires. These controls
+reduce casual abuse but are not a replacement for authentication on a
+permanent or high-traffic deployment.
 
 Report security issues through GitHub private vulnerability reporting when it
 is enabled. Do not include secrets or private documents in a public issue.

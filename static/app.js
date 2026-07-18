@@ -52,6 +52,8 @@ const state = {
   currentPage: 0,
   zoom: 72,
   toastTimer: null,
+  demoMode: false,
+  retentionMinutes: 0,
 };
 
 const form = $("#render-form");
@@ -138,8 +140,15 @@ function setProjectName(name) {
   $("#project-name").textContent = name || "未命名文稿";
 }
 
-function setSaveState(text = "参数已更新 · 等待生成") {
-  $("#save-state").textContent = text;
+function setSaveState(text = "") {
+  $("#save-state").textContent = text || processingLocationText(
+    "参数已更新 · 等待生成",
+    `在线演示 · 文件${state.retentionMinutes || 60} 分钟后清理`,
+  );
+}
+
+function processingLocationText(localText, onlineText) {
+  return state.demoMode ? onlineText : localText;
 }
 
 function plainTextFromMarkdown(text) {
@@ -180,7 +189,9 @@ function setDocument(file) {
   state.documentFile = file;
   $("#document-name").textContent = file ? file.name : "选择 Markdown 或 Word";
   setProjectName(file ? filenameWithoutExtension(file.name) : "未命名文稿");
-  setSaveState(file ? "文档仅在本机处理 · 等待生成" : "本地处理 · 未上传服务器");
+  setSaveState(file
+    ? processingLocationText("文档仅在本机处理 · 等待生成", "文档已选择 · 等待在线生成")
+    : processingLocationText("本地处理 · 未上传服务器", "在线演示 · 等待输入"));
   if (file) {
     previewDocument(file).catch(() => updatePaperText());
   } else {
@@ -435,7 +446,15 @@ async function downloadOpenFonts() {
 async function loadHealth() {
   try {
     const data = await apiJson("/api/health");
+    state.demoMode = Boolean(data.demo_mode);
+    state.retentionMinutes = Number(data.retention_minutes || 0);
     setServiceState("online", `${data.fonts} 款字体可用`);
+    if (state.demoMode) {
+      const retention = state.retentionMinutes ? `${state.retentionMinutes} 分钟后清理` : "定时清理";
+      setSaveState(`在线演示 · 文件${retention}`);
+      $("#loading-note").textContent = "在线生成，文件将定时清理";
+      $("#open-ai").hidden = true;
+    }
   } catch {
     setServiceState("offline", "本地服务未连接");
   }
@@ -589,14 +608,17 @@ async function submitRender(event) {
   if (state.fontUpload) payload.append("font_upload", state.fontUpload, state.fontUpload.name);
 
   setLoading(true);
-  setSaveState("正在本机生成手写页面");
+  setSaveState(processingLocationText("正在本机生成手写页面", "正在在线生成手写页面"));
   try {
     const data = await apiJson("/api/render", { method: "POST", body: payload });
     state.result = data;
     state.currentPage = 0;
     renderPageStrip(data);
     showPage(0);
-    setSaveState(`已生成 ${data.page_count} 页 · 文件保存在本机`);
+    setSaveState(processingLocationText(
+      `已生成 ${data.page_count} 页 · 文件保存在本机`,
+      `已生成 ${data.page_count} 页 · ${state.retentionMinutes || 60} 分钟后清理`,
+    ));
     showToast(`已生成 ${data.page_count} 页手写文稿`, "success");
   } catch (error) {
     setSaveState("生成失败 · 请检查输入");
@@ -648,7 +670,10 @@ function resetWorkspace() {
   $("#direct-text").hidden = true;
   $("#document-drop").hidden = false;
   setProjectName("未命名文稿");
-  setSaveState("本地处理 · 未上传服务器");
+  setSaveState(processingLocationText(
+    "本地处理 · 未上传服务器",
+    `在线演示 · 文件${state.retentionMinutes || 60} 分钟后清理`,
+  ));
   updatePaperText();
   applyTemplateLayout(PAPER_TEMPLATE_LAYOUTS[state.paperStyle]);
   updatePaperAppearance();

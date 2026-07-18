@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import math
 import json
 import logging
+import os
+import shutil
+import threading
+import time
 import uuid
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .document import DocumentError, extract_text
@@ -27,10 +34,92 @@ JOBS_DIR = DATA_DIR / "jobs"
 
 MAX_DOCUMENT_BYTES = 18 * 1024 * 1024
 MAX_ASSET_BYTES = 28 * 1024 * 1024
+DEMO_MODE = os.getenv("HANDDRAFT_DEMO_MODE", "").lower() in {"1", "true", "yes", "on"}
+JOB_TTL_SECONDS = max(300, int(os.getenv("HANDDRAFT_JOB_TTL_SECONDS", "3600")))
+DEMO_RATE_LIMIT = max(1, int(os.getenv("HANDDRAFT_RATE_LIMIT", "6")))
+DEMO_RATE_WINDOW_SECONDS = max(10, int(os.getenv("HANDDRAFT_RATE_WINDOW_SECONDS", "60")))
+DEMO_MAX_PAGES = max(1, int(os.getenv("HANDDRAFT_MAX_PAGES", "6")))
 
-app = FastAPI(title="HandDraft", version="0.1.0")
+if DEMO_MODE:
+    MAX_DOCUMENT_BYTES = min(MAX_DOCUMENT_BYTES, 6 * 1024 * 1024)
+    MAX_ASSET_BYTES = min(MAX_ASSET_BYTES, 12 * 1024 * 1024)
+
+
+class SlidingWindowLimiter:
+    def __init__(self, limit: int, window_seconds: int) -> None:
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._events: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def allow(self, key: str, now: float | None = None) -> tuple[bool, int]:
+        current = time.monotonic() if now is None else now
+        with self._lock:
+            events = self._events[key]
+            cutoff = current - self.window_seconds
+            while events and events[0] <= cutoff:
+                events.popleft()
+            if len(events) >= self.limit:
+                retry_after = max(1, math.ceil(events[0] + self.window_seconds - current))
+                return False, retry_after
+            events.append(current)
+            return True, 0
+
+
+def cleanup_expired_jobs(
+    jobs_dir: Path = JOBS_DIR,
+    max_age_seconds: int = JOB_TTL_SECONDS,
+    now: float | None = None,
+) -> int:
+    current = time.time() if now is None else now
+    removed = 0
+    if not jobs_dir.exists():
+        return removed
+    for child in jobs_dir.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            if current - child.stat().st_mtime > max_age_seconds:
+                shutil.rmtree(child)
+                removed += 1
+        except FileNotFoundError:
+            continue
+    return removed
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    cleanup_expired_jobs()
+    yield
+
+
+demo_limiter = SlidingWindowLimiter(DEMO_RATE_LIMIT, DEMO_RATE_WINDOW_SECONDS)
+
+app = FastAPI(title="HandDraft", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/outputs", StaticFiles(directory=JOBS_DIR), name="outputs")
+
+
+@app.middleware("http")
+async def public_demo_guards(request: Request, call_next):
+    if DEMO_MODE and request.method == "POST" and request.url.path == "/api/render":
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        client_ip = forwarded or (request.client.host if request.client else "unknown")
+        allowed, retry_after = demo_limiter.allow(client_ip)
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "生成请求过于频繁，请稍后再试。"},
+                headers={"Retry-After": str(retry_after)},
+            )
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "same-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _safe_name(filename: str) -> str:
@@ -50,6 +139,9 @@ async def _save_upload(upload: UploadFile, directory: Path, max_bytes: int) -> P
                 break
             total += len(chunk)
             if total > max_bytes:
+                handle.close()
+                target.unlink(missing_ok=True)
+                await upload.close()
                 raise HTTPException(status_code=413, detail="上传文件过大。")
             handle.write(chunk)
     await upload.close()
@@ -66,7 +158,12 @@ def health() -> dict[str, object]:
     visible_fonts = [
         font for font in list_fonts() if font.get("category") == "normal" or font.get("source") == "user"
     ]
-    return {"ok": True, "fonts": len(visible_fonts)}
+    return {
+        "ok": True,
+        "fonts": len(visible_fonts),
+        "demo_mode": DEMO_MODE,
+        "retention_minutes": JOB_TTL_SECONDS // 60 if DEMO_MODE else None,
+    }
 
 
 @app.get("/api/fonts")
@@ -95,6 +192,8 @@ def open_fonts() -> dict[str, object]:
 
 @app.post("/api/open-fonts/download")
 def download_fonts() -> dict[str, object]:
+    if DEMO_MODE:
+        raise HTTPException(status_code=403, detail="在线演示已内置字体，不支持下载新字体。")
     result = download_open_fonts(force=False, categories={"normal"})
     return {"ok": not result["failed"], **result, "fonts": list_fonts()}
 
@@ -108,6 +207,7 @@ async def render(
     scene_background: Annotated[UploadFile | None, File()] = None,
     font_upload: Annotated[UploadFile | None, File()] = None,
 ) -> dict[str, object]:
+    cleanup_expired_jobs()
     job_id = uuid.uuid4().hex
     job_dir = JOBS_DIR / job_id
     upload_dir = job_dir / "uploads"
@@ -142,6 +242,8 @@ async def render(
         if not text.strip():
             raise DocumentError("文档里没有可渲染的文字。")
         render_settings = RenderSettings.from_payload(settings)
+        if DEMO_MODE:
+            render_settings.max_pages = min(render_settings.max_pages, DEMO_MAX_PAGES)
         pages = render_pages(text, font_path, background_path, render_settings, scene_background_path)
         outputs = save_outputs(pages, job_dir)
     except DocumentError as exc:
@@ -164,6 +266,8 @@ async def render(
 
 @app.post("/api/ai/glyph-kit")
 async def glyph_kit(payload: Annotated[dict[str, object], Body()]) -> dict[str, object]:
+    if DEMO_MODE:
+        raise HTTPException(status_code=403, detail="在线演示不接收 API Key，请在本地运行后使用。")
     api_key = str(payload.get("apiKey") or payload.get("api_key") or "")
     provider = str(payload.get("provider") or "custom")
     model = str(payload.get("model") or "")

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: handdraft-demo-nbbc
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: HANDDRAFT_DEMO_MODE
+        value: "1"
+      - key: HANDDRAFT_JOB_TTL_SECONDS
+        value: "3600"
+      - key: HANDDRAFT_RATE_LIMIT
+        value: "6"
+      - key: HANDDRAFT_RATE_WINDOW_SECONDS
+        value: "60"
+      - key: HANDDRAFT_MAX_PAGES
+        value: "6"
